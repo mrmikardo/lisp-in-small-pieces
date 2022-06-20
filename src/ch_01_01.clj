@@ -10,7 +10,7 @@
 ;; which is able to carry out the full spectrum of computations. That
 ;; is, our evaluator will be [Turing complete](https://en.wikipedia.org/wiki/Turing_completeness).
 
-(ns ch-01
+(ns ch-01-1
   "Chapter 1: a basic evaluator.")
 
 ;; ## Preliminaries
