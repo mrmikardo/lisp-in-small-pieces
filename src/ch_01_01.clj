@@ -1,5 +1,5 @@
 
-;; # Chapter 1 ⚗️
+;; # Chapter 1, part I ⚗️
 ;;
 ;; The first chapter handles building a basic [Scheme-style](https://en.wikipedia.org/wiki/Scheme_(programming_language)) evaluator.
 ;; It starts with a discussion of evaluating _atomic expressions_ and
@@ -9,9 +9,16 @@
 ;; By the end of this chapter we'll have a fully functional evaluator
 ;; which is able to carry out the full spectrum of computations. That
 ;; is, our evaluator will be [Turing complete](https://en.wikipedia.org/wiki/Turing_completeness).
+;;
+;; In the first section, we'll see the outlines of a barebones evaluator
+;; which can handle basic _atomic_ expresssions and some more complicated
+;; _special forms_. In part II, we'll extend the evaluator from this
+;; section to additionally handle _function evaluation_.
 
 (ns ch-01-1
-  "Chapter 1: a basic evaluator.")
+  "Chapter 1: a basic evaluator (no functions)."
+  (:require
+   [ch-01-2 :as e]))
 
 ;; ## Preliminaries
 
@@ -83,7 +90,7 @@
   (if (atom? e)
     (cond
       ;; lookup symbols in the environment
-      (symbol? e) (lookup e env)
+      (symbol? e) (e/lookup e env)
       ;; unclear if we should permit Clojure vectors here
       ((some-fn number? string? char? boolean? vector?) e) e
       :else (wrong "Unable to evaluate atom" e))
@@ -109,7 +116,7 @@
 ;; forms and function invocation.
 
 ;; First we declare some required helper functions (which are defined below).
-(declare eprogn update! invoke make-function evlis)
+(declare eprogn update! invoke make-function evlis lookup)
 
 ;; Note that our definition of `evaluate` assumes that the programs (expressions)
 ;; we ask it to evaluate are syntactically well-formed; it doesn't do any checking
@@ -118,7 +125,7 @@
   (if (atom? e)
     (cond
       ;; lookup symbols in the environment
-      (symbol? e) (lookup e env)
+      (symbol? e) (e/lookup e env)
       ;; unclear if we should permit Clojure vectors here
       ((some-fn number? string? char? boolean? vector?) e) e
       :else (wrong "Unable to evaluate atom" e))
@@ -253,92 +260,13 @@
     (map #(evaluate % env) exps)
     '()))
 
-(assert (= '("a" "b" "hello") (evlis '(a b "hello") {'a "a" 'b "b"})))
+(evlis '(a b "hello") {'a "a" 'b "b"})
 
 ;; Note that we have to pass some arguments in the `env` parameter here,
-;; so that `evaluate` is able to look up the symbols `'a` and `'b`.
+;; so that `evaluate` is able to look up the symbols `'a` and `'b`. We've
+;; cheated a little bit too by importing the `lookup` function ahead of time from
+;; part II.
 ;;
 ;; As functions are a little more complicated, and involve some understanding
 ;; of the _environment_, we'll turn our attention to that prior to seeing a
 ;; definition of `invoke`.
-
-;; ## Section 1.5 - environments, `update!`, `extend` and `lookup`
-;;
-;; An environment associates variables with values - this is what's known
-;; as a _binding_. An environment is a sort of abstract data type which
-;; has the following interface;
-;;
-;; - It should be possible to insert new items.
-;; - It should be possible to lookup existing items by id/key.
-;; - It should be possible to overwrite existing values with new values.
-;;
-;; Note that the first and last points are effectively synonymous if we
-;; implement our environment in such a way that inserting a value associated
-;; with a preexisting key simply overwrites the value that the key already
-;; points to.
-;;
-;; Historically an [_association-list_](https://en.wikipedia.org/wiki/Association_list) was the data structure chosen for
-;; this purpose; in Clojure  however we can get greater performance and utility with
-;; a [_hashmap_](https://clojure.org/guides/learn/hashed_colls).
-;;
-;; The initial environment is simply an empty hashmap.
-(def env-init {})
-
-;; We'll tackle the first part of the interface we defined further up
-;; with `extend` - a function that allows us to insert new items into
-;; the environment;
-(defn extend
-  "Enriches an environment by associating variables -> values.
-  Note that this shadows `clojure.core/extend`."
-  [env variables values]
-  (if (= (count variables) (count values))
-    (let [env-extension (zipmap variables values)]
-      (merge env env-extension))
-    (wrong "Mismatch in counts of values and variables" env {:env env
-                                                             :variables variables
-                                                             :values values})))
-
-(extend {} ['a 'b 'c] [1 2 3])
-
-;; Note that this hits the final point too - values in the environment are automatically
-;; overwritten with those that we _extend into_ it:
-(extend {'a 1 'b 2 'c 3} ['a 'b 'c 'd] [4 5 6 7])
-
-;; For completeness however we'll define the function `update!` which
-;; _updates_ the value associated with an id in the environment.
-(defn update!
-  "Updates the value associated with id in env."
-  [id env value]
-  (if (map? env)
-    (assoc env id value)
-    (wrong "Badly structured env" env {:id id
-                                       :env env
-                                       :value value})))
-
-(update! 'a {'a 1} 2)
-
-;; Finally, to complete the interface for our environment, we'll define
-;; a `lookup` function which takes the environment and an id (a _key_) as
-;; parameters and returns the value associated with that id.
-(defn lookup
-  "Returns the value associated with an id."
-  [id env]
-  (if-let [[_k v] (find env id)]
-    v
-    (wrong "No such binding" id)))
-
-(lookup 'foo {'foo "foo"})
-(lookup 'my+ {'my+ +})
-
-;; It's worth noting, whilst we're here, that `lookup` marks an implicit
-;; conversion between _symbols_ and _variables_: an environment associates
-;; the latter with semantically meaningful values; and variables just so happen
-;; to be represented syntactically by symbols.
-;;
-;; But we could choose something
-;; else to represent variables. Accordingly, a more precise definition of the
-;; `lookup` function given above might be `,,, (lookup (symbol->variable exp) env) ,,,`, where
-;; we call the `symbol->variable` helper to make this conversion explicit.
-;;
-;; As it stands, we leave `symbol->variable` as an exercise for the reader
-;; 😉.
